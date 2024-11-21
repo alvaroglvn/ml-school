@@ -2,6 +2,8 @@ import logging
 import os
 from pathlib import Path
 
+import mlflow.system_metrics
+
 from common import (
     PYTHON,
     TRAINING_BATCH_SIZE,
@@ -43,6 +45,7 @@ configure_logging()
         "mlflow",
         "setuptools",
         "python-dotenv",
+        "psutil",
     ),
 )
 class Training(FlowSpec, FlowMixin):
@@ -355,14 +358,25 @@ class Training(FlowSpec, FlowMixin):
         This function will train the model using the entire dataset.
         """
         import mlflow
+        import inspect
 
         # Let's log the training process under the experiment we started at the
         # beginning of the flow.
         mlflow.set_tracking_uri(self.mlflow_tracking_uri)
-        with mlflow.start_run(run_id=self.mlflow_run_id):
+
+        # Enable system metrics
+        mlflow.enable_system_metrics_logging()
+        mlflow.system_metrics.set_system_metrics_samples_before_logging(1)
+        mlflow.system_metrics.set_system_metrics_sampling_interval(1)
+
+        with mlflow.start_run(run_id=self.mlflow_run_id, log_system_metrics=True):
             # Let's disable the automatic logging of models during training so we
             # can log the model manually during the registration step.
             mlflow.autolog(log_models=False)
+
+            # Logging of pipeline source code
+            source_code = inspect.getsource(self.train_model.__globals__["Training"])
+            mlflow.log_text(source_code, artifact_file="source_code.txt")
 
             # Let's now build and fit the model on the entire dataset.
             self.model = build_model(self.x.shape[1])
