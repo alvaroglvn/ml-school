@@ -4,6 +4,7 @@ from pathlib import Path
 
 import mlflow.system_metrics
 
+
 from common import (
     PYTHON,
     TRAINING_BATCH_SIZE,
@@ -46,6 +47,7 @@ configure_logging()
         "setuptools",
         "python-dotenv",
         "psutil",
+        "seaborn",
     ),
 )
 class Training(FlowSpec, FlowMixin):
@@ -258,6 +260,9 @@ class Training(FlowSpec, FlowMixin):
             self.accuracy,
         )
 
+        # Generate predictions for the test set
+        self.predictions = self.model.predict(self.x_test).argmax(axis=1)
+
         # Let's log everything under the same nested run we created when training the
         # current fold's model.
         mlflow.set_tracking_uri(self.mlflow_tracking_uri)
@@ -274,7 +279,7 @@ class Training(FlowSpec, FlowMixin):
         # each fold.
         self.next(self.evaluate_model)
 
-    @card
+    @card(type="blank")
     @step
     def evaluate_model(self, inputs):
         """Evaluate the overall cross-validation process.
@@ -284,12 +289,30 @@ class Training(FlowSpec, FlowMixin):
         """
         import mlflow
         import numpy as np
+        from sklearn.metrics import confusion_matrix
+        import seaborn as sns
+        import matplotlib.pyplot as plt
+        from metaflow.cards import Image
 
         # We need access to the `mlflow_run_id` and `mlflow_tracking_uri` artifacts
         # that we set at the start of the flow, but since we are in a join step, we
         # need to merge the artifacts from the incoming branches to make them
         # available.
         self.merge_artifacts(inputs, include=["mlflow_run_id", "mlflow_tracking_uri"])
+
+        # Compute confusion matrix
+        gr_truth = np.concatenate([inp.y_test for inp in inputs])
+        predictions = np.concatenate([inp.predictions for inp in inputs])
+        cm = confusion_matrix(gr_truth, predictions)
+        # Plot confusion matrix
+        plt.figure(figsize=(8, 6))
+        ax = sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+        ax.set_title("Confusion Matrix")
+        ax.set_xlabel("Predicted")
+        ax.set_ylabel("True")
+
+        # Append confusion matrix to the card
+        current.card.append(Image.from_matplotlib(ax.figure, label="Confusion Matrix"))
 
         # Let's calculate the mean and standard deviation of the accuracy and loss from
         # all the cross-validation folds. Notice how we are accumulating these values
