@@ -289,7 +289,7 @@ class Training(FlowSpec, FlowMixin):
         """
         import mlflow
         import numpy as np
-        from sklearn.metrics import confusion_matrix
+        from sklearn.metrics import confusion_matrix, precision_score, recall_score
         import seaborn as sns
         import matplotlib.pyplot as plt
         from metaflow.cards import Image
@@ -321,6 +321,10 @@ class Training(FlowSpec, FlowMixin):
         self.accuracy, self.loss = np.mean(metrics, axis=0)
         self.accuracy_std, self.loss_std = np.std(metrics, axis=0)
 
+        # Calculate model precision and recall
+        self.precision = precision_score(gr_truth, predictions, average="weighted")
+        self.recall = recall_score(gr_truth, predictions, average="weighted")
+
         logging.info("Accuracy: %f ±%f", self.accuracy, self.accuracy_std)
         logging.info("Loss: %f ±%f", self.loss, self.loss_std)
 
@@ -333,6 +337,8 @@ class Training(FlowSpec, FlowMixin):
                     "cross_validation_accuracy_std": self.accuracy_std,
                     "cross_validation_loss": self.loss,
                     "cross_validation_loss_std": self.loss_std,
+                    "cross_validation_precision": self.precision,
+                    "cross_validation_recall": self.recall,
                 },
             )
 
