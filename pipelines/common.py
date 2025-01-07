@@ -37,15 +37,15 @@ TRAINING_BATCH_SIZE = 32
 class FlowMixin:
     """Base class used to share code across multiple pipelines."""
 
-    dataset = IncludeFile(
-        "penguins",
-        is_text=True,
-        help=(
-            "Local copy of the penguins dataset. This file will be included in the "
-            "flow and will be used whenever the flow is executed in development mode."
-        ),
-        default="data/penguins.csv",
-    )
+    # dataset = IncludeFile(
+    #     "penguins",
+    #     is_text=True,
+    #     help=(
+    #         "Local copy of the penguins dataset. This file will be included in the "
+    #         "flow and will be used whenever the flow is executed in development mode."
+    #     ),
+    #     default="data/penguins.csv",
+    # )
 
     def load_dataset(self):
         """Load and prepare the dataset.
@@ -56,6 +56,7 @@ class FlowMixin:
         string parameter.
         """
         import numpy as np
+        import glob
 
         if current.is_production:
             dataset = os.environ.get("DATASET", self.dataset)
@@ -70,7 +71,21 @@ class FlowMixin:
         else:
             # When running in development mode, the raw data is passed as a string,
             # so we can convert it to a DataFrame.
-            data = pd.read_csv(StringIO(self.dataset))
+            # data = pd.read_csv(StringIO(self.dataset))
+
+            # Load all data from local folder
+            dataset_folder = os.environ.get("DATASET_FOLDER", "data/")
+            logging.info("Uisng dataset folder: %s", dataset_folder)
+
+            csv_files = glob.glob(os.path.join(dataset_folder, "*.csv"))
+            if not csv_files:
+                raise ValueError(
+                    f"No CSV files found in the folder '{dataset_folder}'."
+                )
+            logging.info("Found %d file(s) in local folder", len(csv_files))
+
+            raw_data = [pd.read_csv(file) for file in csv_files]
+            data = pd.concat(raw_data, ignore_index=True)
 
         # Replace extraneous values in the sex column with NaN. We can handle missing
         # values later in the pipeline.
